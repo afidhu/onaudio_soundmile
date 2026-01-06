@@ -20,11 +20,7 @@ dependencies:
   just_audio_background: ^0.0.1-beta.13
   device_info_plus: ^11.3.3
   on_audio_query:
-    git:
-      url: https://github.com/rozpo/on_audio_query
-      ref: 0d78299
-      path: packages/on_audio_query
-    
+      path: ./on_audio_query/packages/on_audio_query
   palette_generator: ^0.3.3+6
   share_plus: ^11.0.0
   audio_session: ^0.1.25
