@@ -1,3 +1,6 @@
+
+
+
 import 'dart:async';
 import 'dart:io';
 import 'package:audio_session/audio_session.dart';
@@ -14,54 +17,92 @@ import 'package:sound_mile/model/extended_song_model.dart';
 import 'package:sound_mile/util/color_category.dart';
 import 'package:sound_mile/util/pref_data.dart';
 
-/// Use lazyPut so controller is created only when needed
 final RecentSongController recentSongController =
-Get.put(RecentSongController(), permanent: true);
-
+Get.put(RecentSongController());
 
 class PlayerController extends GetxController {
-  /// Singleton pattern (kept, but safer lifecycle)
   static final PlayerController _instance = PlayerController._internal();
+
   factory PlayerController() => _instance;
   PlayerController._internal();
 
-  /// Core audio player
   final AudioPlayer audioPlayer = AudioPlayer();
-  final favouriteSongsIds = <int>[].obs;
 
-  /// Playback state
-  final isPlaying = false.obs;
-  final currentIndex = 0.obs;
-  final isShuffle = false.obs;
-  final loopMode = LoopMode.off.obs;
+  var isPlaying = false.obs;
+  var currentIndex = 0.obs;
+  var isShuffle = false.obs;
+  var userInitiatedPlayback = false.obs;
 
-  /// User intent flag (important for interruptions)
-  final userInitiatedPlayback = false.obs;
+  var loopMode = LoopMode.off.obs;
+  var playList = <ExtendedSongModel>[].obs;
+  var recentSongs = <ExtendedSongModel>[].obs;
+  var allSongs = <ExtendedSongModel>[].obs;
+  var favouriteSongsIds = <int>[].obs;
+  var playingSong = Rx<ExtendedSongModel?>(null);
+  var imageColor = Rx<Color?>(null);
+  var secondColor = Rx<Color?>(null);
 
-  /// Song lists
-  final playList = <ExtendedSongModel>[].obs;
-  final allSongs = <ExtendedSongModel>[].obs;
-  final recentSongs = <ExtendedSongModel>[].obs;
-
-  /// UI reactive data
-  final playingSong = Rx<ExtendedSongModel?>(null);
-  final imageColor = Rx<Color?>(bg);
-  final secondColor = Rx<Color?>(accentColor);
-
-  /// Internal audio sources
   List<AudioSource> songList = [];
 
-  /// Stream subscriptions (IMPORTANT to avoid memory leaks)
-  StreamSubscription<int?>? _indexSub;
-  StreamSubscription<PlayerState>? _stateSub;
-  StreamSubscription? _noisySub;
-  StreamSubscription? _interruptSub;
+  @override
+  void onInit() {
+    super.onInit();
+    // loadLastPlayedSong(); // Load last played song before initializing listeners
+    setupAudioSession();
+    _initPlayerListener();
+  }
 
   bool wasPlayingBeforeInterruption = false; // Track user intent
 
+  Future<void> setupAudioSession() async {
+    try {
+      // 1. Get the shared audio session instance
+      final session = await AudioSession.instance;
 
+      // 2. Configure the session for music playback (important for Android/iOS)
+      await session.configure(AudioSessionConfiguration.music());
 
+      // 3. Handle the "becoming noisy" event (e.g., unplugging headphones)
+      session.becomingNoisyEventStream.listen((_) {
+        try {
+          // Pause playback to avoid blasting sound from device speaker
+          audioPlayer.pause();
+        } catch (e, stack) {
+          debugPrint('Error pausing on becoming noisy: $e\n$stack');
+        }
+      });
 
+      // 4. Handle audio interruptions (e.g., phone call, another media app)
+      session.interruptionEventStream.listen((event) async {
+        try {
+          if (event.begin) {
+            // An interruption has started
+            // Save whether the user was playing audio
+            userInitiatedPlayback.value = audioPlayer.playing;
+
+            // Pause playback during the interruption
+            await audioPlayer.pause();
+          } else {
+            // The interruption has ended
+            if (userInitiatedPlayback.value && !audioPlayer.playing) {
+              // If the user had initiated playback before interruption
+              // and playback is not currently active...
+
+              // Reactivate the session
+              await session.setActive(true);
+
+              // Resume playback
+              audioPlayer.play();
+            }
+          }
+        } catch (e, stack) {
+          debugPrint('Error handling interruption: $e\n$stack');
+        }
+      });
+    } catch (e, stack) {
+      debugPrint('Error setting up audio session: $e\n$stack');
+    }
+  }
 
   // Future<void> setupAudioSession() async {
   //   try {
@@ -113,7 +154,7 @@ class PlayerController extends GetxController {
   void saveLastPlayedSong(List<ExtendedSongModel> songs) async {
     try {
       final songIds = songs
-          // ignore: unnecessary_null_comparison
+      // ignore: unnecessary_null_comparison
           .where((song) => song.id != null)
           .map((song) => song.id)
           .toList();
@@ -134,7 +175,7 @@ class PlayerController extends GetxController {
 
     try {
       final artwork =
-          await OnAudioQuery().queryArtwork(songId, ArtworkType.AUDIO);
+      await OnAudioQuery().queryArtwork(songId, ArtworkType.AUDIO);
       return artwork;
     } catch (e, stack) {
       debugPrint('Error fetching artwork for songId $songId: $e\n$stack');
@@ -146,7 +187,7 @@ class PlayerController extends GetxController {
   Future<Color> _getImageDominantColor(Uint8List imageData) async {
     try {
       final PaletteGenerator paletteGenerator =
-          await PaletteGenerator.fromImageProvider(
+      await PaletteGenerator.fromImageProvider(
         MemoryImage(imageData),
         size: const Size(200, 200), // Optimize speed by limiting image size
         maximumColorCount: 10, // Optimize speed by limiting color count
@@ -161,7 +202,7 @@ class PlayerController extends GetxController {
   Future<Color> _getImageSecondColor(Uint8List imageData) async {
     try {
       final PaletteGenerator paletteGenerator =
-          await PaletteGenerator.fromImageProvider(
+      await PaletteGenerator.fromImageProvider(
         MemoryImage(imageData),
         size: const Size(200, 200), // Optimize speed by limiting image size
         maximumColorCount: 10, // Optimize speed by limiting color count
@@ -341,9 +382,47 @@ class PlayerController extends GetxController {
   //     return [];
   //   }
   // }
+  Future<List<ExtendedSongModel>> fetchSongs() async {
+    try {
+      // Step 1: Fetch songs from device storage
+      List<SongModel> fetchedSongs = await OnAudioQuery().querySongs(
+        ignoreCase: true,
+        orderType: OrderType.ASC_OR_SMALLER,
+        uriType: UriType.EXTERNAL,
+      );
 
+      // Step 2: Create a list of futures to fetch artwork in parallel
+      List<Future<ExtendedSongModel>> futures = fetchedSongs.map((song) async {
+        String? artworkUri = await fetchArtworkUri(song.id);
 
+        return ExtendedSongModel.fromSongModel(
+          song,
+          artworkUri != null ? Uri.parse(artworkUri) : null,
+        );
+      }).toList();
 
+      // Step 3: Wait for all futures to complete in parallel
+      List<ExtendedSongModel> extendedSongs = await Future.wait(futures);
+
+      // Step 4: Use a map to ensure uniqueness based on song ID
+      final uniqueSongs = <int, ExtendedSongModel>{};
+      for (var song in extendedSongs) {
+        uniqueSongs[song.id] = song;
+      }
+
+      // Step 5: Assign the unique list to your observable/list
+      allSongs.value = uniqueSongs.values.toList();
+
+      // Step 6: Optionally trigger additional async updates without blocking the main fetch
+      unawaited(getRecent(allSongs));
+      unawaited(recentSongController.loadRecentPlayedSongs());
+
+      // Step 7: Return the result
+      return allSongs;
+    } catch (e) {
+      return [];
+    }
+  }
 
   Future<List<ExtendedSongModel>> getRecent(
       List<ExtendedSongModel> allSongs) async {
@@ -370,7 +449,7 @@ class PlayerController extends GetxController {
     if (artwork != null) {
       final tempDir = await getTemporaryDirectory();
       final file =
-          await File('${tempDir.path}/$songId.jpg').writeAsBytes(artwork);
+      await File('${tempDir.path}/$songId.jpg').writeAsBytes(artwork);
       return file.uri.toString();
     }
     return null;
@@ -415,27 +494,6 @@ class PlayerController extends GetxController {
     } catch (e) {}
   }
 
-  Future<List<ExtendedSongModel>> fetchSongs() async {
-    try {
-      final songs = await OnAudioQuery().querySongs(
-        ignoreCase: true,
-        uriType: UriType.EXTERNAL,
-        orderType: OrderType.ASC_OR_SMALLER,
-      );
-
-      allSongs.value = songs
-          .map((s) => ExtendedSongModel.fromSongModel(s, null))
-          .toList();
-
-      unawaited(recentSongController.loadRecentPlayedSongs());
-      return allSongs;
-    } catch (_) {
-      return [];
-    }
-  }
-
-
-
   Future<void> updatePlaylistOrder(
       List<ExtendedSongModel> reorderedSongs) async {
     try {
@@ -443,7 +501,7 @@ class PlayerController extends GetxController {
 
       final currentSong = playingSong.value;
       final currentAudioSource =
-          audioPlayer.audioSource as ConcatenatingAudioSource;
+      audioPlayer.audioSource as ConcatenatingAudioSource;
 
       // Get original list of URIs to track reordering
       final originalUris = playList.map((e) => e.uri!).toList();
@@ -465,7 +523,7 @@ class PlayerController extends GetxController {
 
       // Find new index of the currently playing song
       final newCurrentIndex =
-          reorderedSongs.indexWhere((s) => s.uri == currentSong?.uri);
+      reorderedSongs.indexWhere((s) => s.uri == currentSong?.uri);
 
       if (newCurrentIndex != -1 && newCurrentIndex != currentIndex.value) {
         // Only seek if the current song's index changed
@@ -504,7 +562,7 @@ class PlayerController extends GetxController {
 
   void toggleLoopMode() {
     loopMode.value =
-        LoopMode.values[(loopMode.value.index + 1) % LoopMode.values.length];
+    LoopMode.values[(loopMode.value.index + 1) % LoopMode.values.length];
     audioPlayer.setLoopMode(loopMode.value);
   }
 
@@ -538,109 +596,9 @@ class PlayerController extends GetxController {
     }
   }
 
-
-  /// Configure Android/iOS audio focus safely
-  Future<void> setupAudioSession() async {
-    final session = await AudioSession.instance;
-    await session.configure(AudioSessionConfiguration.music());
-
-    /// Headphone unplug event
-    _noisySub = session.becomingNoisyEventStream.listen((_) async {
-      if (audioPlayer.playing) {
-        await audioPlayer.pause();
-      }
-    });
-
-    /// Phone calls / other apps interruption
-    _interruptSub = session.interruptionEventStream.listen((event) async {
-      if (event.begin) {
-        userInitiatedPlayback.value = audioPlayer.playing;
-        await audioPlayer.pause();
-      } else {
-        if (userInitiatedPlayback.value) {
-          await session.setActive(true);
-          await audioPlayer.play();
-        }
-      }
-    });
+  @override
+  void onClose() {
+    audioPlayer.dispose();
+    super.onClose();
   }
-
-
-  bool _colorBusy = false;
-
-  /// Prevent multiple palette extractions at once
-  Future<void> _updateDominantColorSafely() async {
-    if (_colorBusy) return;
-    _colorBusy = true;
-
-    try {
-      final artwork =
-      await OnAudioQuery().queryArtwork(playingSong.value!.id, ArtworkType.AUDIO);
-
-      if (artwork == null) return;
-
-      final palette = await PaletteGenerator.fromImageProvider(
-        MemoryImage(artwork),
-        size: const Size(120, 120), // smaller = safer
-        maximumColorCount: 6,
-      );
-
-      imageColor.value = palette.dominantColor?.color ?? bg;
-      secondColor.value =
-          palette.lightMutedColor?.color.withOpacity(0.5) ?? accentColor;
-    } catch (_) {
-      imageColor.value = bg;
-    } finally {
-      _colorBusy = false;
-    }
-  }
-
-
-
-  void _initPlayerListeners() {
-    /// Track index change
-    _indexSub = audioPlayer.currentIndexStream.listen((index) {
-      if (index == null || index >= playList.length) return;
-
-      currentIndex.value = index;
-      playingSong.value = playList[index];
-
-      /// Update UI colors lazily (avoid spamming)
-      _updateDominantColorSafely();
-
-      /// Save recent song
-      recentSongController.addSongToRecent(playList[index]);
-    });
-
-    /// Track completion state
-    _stateSub = audioPlayer.playerStateStream.listen((state) async {
-      if (state.processingState == ProcessingState.completed &&
-          loopMode.value == LoopMode.off &&
-          !audioPlayer.hasNext) {
-        isPlaying.value = false;
-        await audioPlayer.stop();
-      }
-    });
-  }
-
-
-
-//   @override
-//   void onClose() {
-//     audioPlayer.dispose();
-//     super.onClose();
-//   }
-// }
-
-
-@override
-void onClose() {
-  _indexSub?.cancel();
-  _stateSub?.cancel();
-  _noisySub?.cancel();
-  _interruptSub?.cancel();
-
-  audioPlayer.dispose();
-  super.onClose();
-}
 }
