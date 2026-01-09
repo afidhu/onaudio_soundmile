@@ -1,9 +1,12 @@
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:sound_mile/controllers/player_controller.dart';
 import 'package:sound_mile/pages/tab/search/search_screen.dart';
@@ -11,6 +14,7 @@ import 'package:sound_mile/pages/tab/library_tab/tab_library.dart';
 
 import '../controllers/audio_controller.dart';
 import '../controllers/home_conroller.dart';
+import '../intro/my_audioHandler.dart';
 import '../model/bottom_model.dart';
 import '../util/color_category.dart';
 import '../util/constant.dart';
@@ -18,6 +22,7 @@ import '../util/constant_widget.dart';
 import 'player/music_player.dart';
 import 'tab/tab_home.dart';
 import '../dataFile/data_file.dart';
+
 
 class HomeScreen extends StatefulWidget {
   HomeScreen({Key? key}) : super(key: key);
@@ -50,6 +55,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _pageController.animateToPage(index,
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    _initAudioService();
+  }
+  late AudioHandler audioHandler;
+  Future<void> _initAudioService() async {
+    audioHandler = await AudioService.init(
+      builder: () => MyAudioHandler(),
+      config:  AudioServiceConfig(
+        androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+        androidNotificationChannelName: 'Music Playback',
+        androidNotificationOngoing: false,
+        androidStopForegroundOnPause: false,
+        androidNotificationClickStartsActivity: true,
+        androidShowNotificationBadge: true,
+        androidResumeOnClick: true,
+      ),
+    );
+    // Optional: start playing automatically
+    await audioHandler.play();
+  }
+
+
+
 
   @override
   Widget build(BuildContext context) {
