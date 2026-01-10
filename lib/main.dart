@@ -7,10 +7,14 @@ import 'package:sound_mile/util/color_category.dart';
 import 'package:sound_mile/util/pref_data.dart';
 import 'controllers/player_controller.dart';
 import 'controllers/recent_song_controller.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'intro/my_audioHandler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await PrefData.initializeDefaults();
+
 
   // Initialize and register controllers only once
   Get.put(PlayerController());
@@ -19,15 +23,17 @@ Future<void> main() async {
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
     androidNotificationChannelName: 'Audio playback',
-    androidNotificationOngoing: true,
     androidNotificationIcon: 'drawable/ic_notification',
     androidResumeOnClick: true,
     androidShowNotificationBadge: true,
     androidNotificationClickStartsActivity: true,
-  );
+    androidStopForegroundOnPause: false,
+    androidNotificationOngoing: false,
 
+  );
   runApp(const MyApp());
 }
+
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -98,3 +104,5 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 }
+
+
