@@ -31,7 +31,6 @@ class _SplashScreenState extends State<SplashScreen> {
     homeController.getIsShowPlayingData();
     isPermitted = (await PrefData.getIsPermitted())!;
     await Future.delayed(const Duration(milliseconds: 50));
-    
 
     // ignore: unnecessary_null_comparison
     if (!isPermitted || isPermitted == null) {
@@ -39,7 +38,7 @@ class _SplashScreenState extends State<SplashScreen> {
     } else {
       // await Future.delayed(const Duration(milliseconds: 50));
       await PlayerController().fetchSongs();
-      Get.to(HomeScreen());
+      Get.to(() => HomeScreen(), transition: Transition.fadeIn);
     }
   }
 
@@ -58,21 +57,19 @@ class _SplashScreenState extends State<SplashScreen> {
               ClipOval(
                 child: getAssetImage(
                   'mile.png',
-                   height: 100.h,
+                  height: 100.h,
                 ),
               ),
               SizedBox(
                 height: 280.h,
               ),
-             
               CircularProgressIndicator(
                 valueColor: AlwaysStoppedAnimation<Color>(secondaryColor),
               ),
-               SizedBox(
+              SizedBox(
                 height: 10,
               ),
               getCustomFont('Loading Data...', 12, textColor, 1),
-      
               SizedBox(
                 height: 20,
               ),

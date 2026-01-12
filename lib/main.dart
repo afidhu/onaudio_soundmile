@@ -1,7 +1,10 @@
+// ignore_for_file: unused_import
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:get/get.dart';
+import 'package:sound_mile/intro/splashActivity.dart' show SplashActivity2;
 import 'package:sound_mile/intro/splash_screen.dart';
 import 'package:sound_mile/util/color_category.dart';
 import 'package:sound_mile/util/pref_data.dart';
@@ -14,7 +17,6 @@ import 'intro/my_audioHandler.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await PrefData.initializeDefaults();
-
 
   // Initialize and register controllers only once
   Get.put(PlayerController());
@@ -29,11 +31,9 @@ Future<void> main() async {
     androidNotificationClickStartsActivity: true,
     androidStopForegroundOnPause: false,
     androidNotificationOngoing: false,
-
   );
   runApp(const MyApp());
 }
-
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -98,11 +98,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           //   colorScheme: ColorScheme.fromSeed(seedColor: accentColor),
           //   useMaterial3: true,
           // ),
-          home: const SplashScreen(),
+          // home: const SplashScreen(),
+          home: SplashActivity2(),
         );
       },
     );
   }
 }
-
-

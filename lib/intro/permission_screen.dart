@@ -7,7 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sound_mile/controllers/player_controller.dart';
-import 'package:sound_mile/intro/splash_screen.dart';
+import 'package:sound_mile/intro/splashActivity.dart' show SplashActivity2;
 import 'package:sound_mile/util/color_category.dart';
 import 'package:sound_mile/util/constant_widget.dart';
 import 'package:sound_mile/util/pref_data.dart';
@@ -33,30 +33,30 @@ class _PermissionPageState extends State<PermissionPage> {
   Future<void> requestPermission() async {
     try {
       if (Platform.isAndroid) {
-
         final double androidVersion = await _getAndroidVersion();
         // Extract the major version number correctly
         // String versionString = Platform.version.split(' ')[0];
         // int androidVersion = int.parse(versionString.split('.')[0]);
 
         // For Android 13 and above
-        if(androidVersion >= 13){
-        final permissions = [
-          Permission.photos,
-          Permission.videos,
-          Permission.audio,
-        ];
+        if (androidVersion >= 13) {
+          final permissions = [
+            Permission.photos,
+            Permission.videos,
+            Permission.audio,
+          ];
 
-        final statuses = await permissions.request();
+          final statuses = await permissions.request();
 
-        if (statuses.values.every((status) => status.isGranted)) {
-          onPermissionGranted();
-        } else {
-          showPermissionDeniedDialog();
-        }
+          if (statuses.values.every((status) => status.isGranted)) {
+            onPermissionGranted();
+          } else {
+            showPermissionDeniedDialog();
+          }
         } else {
           // For Android versions below 13
-          final status = await Permission.storage.status;          if (status.isGranted) {
+          final status = await Permission.storage.status;
+          if (status.isGranted) {
             onPermissionGranted();
           } else if (status.isDenied || status.isPermanentlyDenied) {
             final requestStatus = await Permission.storage.request();
@@ -95,7 +95,8 @@ class _PermissionPageState extends State<PermissionPage> {
                 child: Text('OK'),
                 onPressed: () {
                   Navigator.pop(context); // Close the dialog
-                  Get.to(() => const SplashScreen());
+                  Get.to(() => SplashActivity2(),
+                      transition: Transition.fadeIn);
                 },
               )
             ],
@@ -160,7 +161,7 @@ class _PermissionPageState extends State<PermissionPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            getSvgImage('permission.svg',height: 100.h),
+            getSvgImage('permission.svg', height: 100.h),
             SizedBox(height: 20.h),
             Text(
               'Sound Mile requires storage permission to access and play music.',
